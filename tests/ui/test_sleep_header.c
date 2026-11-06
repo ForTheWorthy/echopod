@@ -161,6 +161,29 @@ static double contrast_ratio(Color foreground, Color background)
     return (lighter + 0.05) / (darker + 0.05);
 }
 
+static Rect sleep_rect(const Theme *theme, const char *text, bool charging, const char *percent)
+{
+    return status_bar_sleep_area(theme, text, true, charging, true, percent);
+}
+
+static void the_countdown_stays_in_the_minutes_column(void)
+{
+    Theme theme = default_theme_for(false);
+    Rect minutes = sleep_rect(&theme, "15m", true, "100%");
+    Rect seconds = sleep_rect(&theme, "0:42", true, "100%");
+    Rect hours = sleep_rect(&theme, "2h", true, "100%");
+    Rect percent = status_bar_percent_area(&theme, "100%", true);
+    int minutes_center = minutes.x + minutes.width / 2;
+    int seconds_center = seconds.x + seconds.width / 2;
+    int hours_center = hours.x + hours.width / 2;
+    CHECK(seconds_center == minutes_center || seconds_center == minutes_center + 1);
+    CHECK(seconds.x + 2 >= minutes.x);
+    CHECK(seconds.x + seconds.width < percent.x);
+    CHECK(hours.x > minutes.x);
+    CHECK(hours.x + hours.width < minutes.x + minutes.width);
+    CHECK(hours_center == minutes_center);
+}
+
 static void every_accent_keeps_the_title_centered(void)
 {
     for (int accent = 0; accent < ACCENT_COUNT; accent++) {
@@ -200,6 +223,7 @@ int main(void)
     static const TestCase cases[] = {
         TEST_CASE(now_playing_stays_centered_beside_every_countdown),
         TEST_CASE(a_portrait_title_stays_centered_above_the_countdown),
+        TEST_CASE(the_countdown_stays_in_the_minutes_column),
         TEST_CASE(every_accent_keeps_the_title_centered),
         TEST_CASE(the_last_minute_stays_readable_on_every_accent),
     };

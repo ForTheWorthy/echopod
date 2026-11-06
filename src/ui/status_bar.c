@@ -111,6 +111,16 @@ static int percent_gap(const Theme *theme)
     return theme->metrics.padding / 2 > 0 ? theme->metrics.padding / 2 : 1;
 }
 
+static int sleep_column_width(const Theme *theme)
+{
+    return text_width(theme->fonts.small, "15m");
+}
+
+static int sleep_column_x(int right, int column, int width)
+{
+    return right - column + (column - width) / 2;
+}
+
 Rect status_bar_bolt_area(const Theme *theme)
 {
     Rect battery = status_bar_battery_area(theme);
@@ -132,13 +142,25 @@ Rect status_bar_sleep_area(const Theme *theme, const char *text, bool battery_kn
 {
     Rect battery = status_bar_battery_area(theme);
     int width = text_width(theme->fonts.small, text);
+    int column = sleep_column_width(theme);
     if (!battery_known) {
-        return (Rect){theme->metrics.screen_width - theme->metrics.padding - width, battery.y,
-                      width, battery.height};
+        int right = theme->metrics.screen_width - theme->metrics.padding;
+        int x = sleep_column_x(right, column, width);
+        if (x + width > right) {
+            x = right - width;
+        }
+        return (Rect){x, battery.y, width, battery.height};
     }
     Rect anchor = show_percent ? status_bar_percent_area(theme, percent, charging)
                                : (charging ? status_bar_bolt_area(theme) : battery);
-    return (Rect){anchor.x - percent_gap(theme) - width, anchor.y, width, anchor.height};
+    int gap = percent_gap(theme);
+    int right = anchor.x - gap;
+    int x = sleep_column_x(right, column, width);
+    int keep = gap / 2 > 0 ? gap / 2 : 1;
+    if (x + width > anchor.x - keep) {
+        x = anchor.x - keep - width;
+    }
+    return (Rect){x, anchor.y, width, anchor.height};
 }
 
 static void draw_percent(Canvas *canvas, const Theme *theme, uint8_t percent, bool charging)
