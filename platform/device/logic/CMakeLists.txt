@@ -32,7 +32,7 @@ target_include_directories(echo_faad2 SYSTEM
     PRIVATE ${ECHO_FAAD2_DIR}/libfaad
 )
 target_compile_definitions(echo_faad2 PRIVATE
-    FIXED_POINT LC_ONLY_DECODER DISABLE_SBR NDEBUG PACKAGE_VERSION="2.11.4"
+    FIXED_POINT LC_ONLY_DECODER DISABLE_SBR NDEBUG PACKAGE_VERSION="2.11.4" HAVE_STDINT_H
 )
 target_compile_options(echo_faad2 PRIVATE -w)
 set_target_properties(echo_faad2 PROPERTIES C_EXTENSIONS ON)
