@@ -1,3 +1,6 @@
+#include <math.h>
+#include <stdio.h>
+
 #include "check.h"
 #include "default_theme.h"
 #include "gfx/canvas.h"
@@ -5,6 +8,12 @@
 #include "hal/display.h"
 #include "ui/header.h"
 #include "ui/status_bar.h"
+
+enum {
+    ACCENT_COUNT = 8,
+    CONTRAST_NUMERATOR = 45,
+    CONTRAST_DENOMINATOR = 10
+};
 
 static Color before_pixels[HAL_DISPLAY_LONG_SIDE * HAL_DISPLAY_LONG_SIDE];
 static Color after_pixels[HAL_DISPLAY_LONG_SIDE * HAL_DISPLAY_LONG_SIDE];
@@ -116,11 +125,83 @@ static void a_portrait_title_stays_centered_above_the_countdown(void)
                                                       countdown(40 * 60 * 1000, 100, true));
 }
 
+static int channel8(unsigned bits, int width)
+{
+    int shift = 8 - width;
+    return (int)((bits << shift) | (bits >> (width - shift)));
+}
+
+static double channel_linear(int value)
+{
+    double unit = value / 255.0;
+    if (unit <= 0.04045) {
+        return unit / 12.92;
+    }
+    return pow((unit + 0.055) / 1.055, 2.4);
+}
+
+static double luminance(Color color)
+{
+    int red = channel8((color >> 11) & 0x1F, 5);
+    int green = channel8((color >> 5) & 0x3F, 6);
+    int blue = channel8(color & 0x1F, 5);
+    return 0.2126 * channel_linear(red) + 0.7152 * channel_linear(green) +
+           0.0722 * channel_linear(blue);
+}
+
+static double contrast_ratio(Color foreground, Color background)
+{
+    double lighter = luminance(foreground);
+    double darker = luminance(background);
+    if (darker > lighter) {
+        double swap = lighter;
+        lighter = darker;
+        darker = swap;
+    }
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+static void every_accent_keeps_the_title_centered(void)
+{
+    for (int accent = 0; accent < ACCENT_COUNT; accent++) {
+        for (int flat = 0; flat < 2; flat++) {
+            for (int portrait = 0; portrait < 2; portrait++) {
+                Theme theme = default_theme_styled(portrait != 0, accent, flat != 0);
+                the_countdown_leaves_the_centered_title_untouched(
+                    &theme, "Now Playing", countdown(40 * 60 * 1000, 100, true));
+            }
+        }
+    }
+}
+
+static void the_last_minute_stays_readable_on_every_accent(void)
+{
+    for (int accent = 0; accent < ACCENT_COUNT; accent++) {
+        for (int flat = 0; flat < 2; flat++) {
+            Theme theme = default_theme_styled(false, accent, flat != 0);
+            Color resting = status_bar_sleep_color(&theme, 15 * 60 * 1000);
+            Color urgent = status_bar_sleep_color(&theme, 42000);
+            CHECK(resting == theme.colors.header_text);
+            double against_top = contrast_ratio(urgent, theme.colors.header_top);
+            double against_background = contrast_ratio(urgent, theme.colors.header_background);
+            if (against_top * CONTRAST_DENOMINATOR < CONTRAST_NUMERATOR ||
+                against_background * CONTRAST_DENOMINATOR < CONTRAST_NUMERATOR) {
+                fprintf(stderr, "accent %d flat %d contrast %.2f header top, %.2f background\n",
+                        accent, flat, against_top, against_background);
+            }
+            CHECK(against_top * CONTRAST_DENOMINATOR >= CONTRAST_NUMERATOR);
+            CHECK(against_background * CONTRAST_DENOMINATOR >= CONTRAST_NUMERATOR);
+        }
+    }
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
         TEST_CASE(now_playing_stays_centered_beside_every_countdown),
         TEST_CASE(a_portrait_title_stays_centered_above_the_countdown),
+        TEST_CASE(every_accent_keeps_the_title_centered),
+        TEST_CASE(the_last_minute_stays_readable_on_every_accent),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

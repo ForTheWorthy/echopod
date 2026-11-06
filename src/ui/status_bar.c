@@ -2,6 +2,7 @@
 
 #include "core/format.h"
 #include "core/string_builder.h"
+#include "gfx/color.h"
 #include "gfx/text.h"
 #include "ui/icons.h"
 #include "ui/label.h"
@@ -94,6 +95,17 @@ void status_bar_sleep_text(uint32_t remaining_ms, char *text, size_t capacity)
     }
 }
 
+Color status_bar_sleep_color(const Theme *theme, uint32_t remaining_ms)
+{
+    if (remaining_ms >= STATUS_BAR_LAST_MINUTE_MS) {
+        return theme->colors.header_text;
+    }
+    if (theme->colors.selection_shine != theme->colors.selection_background) {
+        return theme->colors.selection_shine;
+    }
+    return color_between(theme->colors.selection_background, theme->colors.header_text, 1, 2);
+}
+
 static int percent_gap(const Theme *theme)
 {
     return theme->metrics.padding / 2 > 0 ? theme->metrics.padding / 2 : 1;
@@ -148,9 +160,7 @@ static void draw_sleep(Canvas *canvas, const Theme *theme, StatusBarState state)
     bool show_percent = state.battery_known && !state.hide_percent;
     Rect area = status_bar_sleep_area(theme, sleep, state.battery_known, state.charging,
                                       show_percent, percent);
-    Color color = state.sleep_remaining_ms < STATUS_BAR_LAST_MINUTE_MS
-                      ? theme->colors.selection_background
-                      : theme->colors.header_text;
+    Color color = status_bar_sleep_color(theme, state.sleep_remaining_ms);
     TextStyle style = {.font = theme->fonts.small, .color = color};
     label_draw(canvas, style,
                (Label){.area = label_centered_area(style.font, area, sleep), .text = sleep});

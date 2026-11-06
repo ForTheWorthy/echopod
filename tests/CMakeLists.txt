@@ -29,7 +29,7 @@ echo_add_unit_test(NAME test_hash SOURCES core/test_hash.c LIBRARIES echo_core)
 echo_add_unit_test(NAME test_power_policy SOURCES core/test_power_policy.c LIBRARIES echo_core)
 echo_add_unit_test(NAME test_sleep_header
     SOURCES ui/test_sleep_header.c ${PROJECT_SOURCE_DIR}/src/app/default_theme.c
-    LIBRARIES echo_ui echo_fonts echo_hal
+    LIBRARIES echo_ui echo_fonts echo_hal m
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )
 echo_add_unit_test(NAME test_low_battery SOURCES core/test_low_battery.c LIBRARIES echo_core)

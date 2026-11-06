@@ -43,6 +43,7 @@ Rect status_bar_battery_area(const Theme *theme);
 int status_bar_battery_fill_width(uint8_t percent, int inner_width);
 void status_bar_percent_text(uint8_t percent, char *text, size_t capacity);
 void status_bar_sleep_text(uint32_t remaining_ms, char *text, size_t capacity);
+Color status_bar_sleep_color(const Theme *theme, uint32_t remaining_ms);
 Rect status_bar_bolt_area(const Theme *theme);
 Rect status_bar_percent_area(const Theme *theme, const char *text, bool charging);
 Rect status_bar_sleep_area(const Theme *theme, const char *text, bool battery_known, bool charging,
