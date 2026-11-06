@@ -7,6 +7,14 @@
 #include "ui_test_theme.h"
 
 enum {
+    FIFTEEN_MINUTES_MS = 15 * 60 * 1000,
+    NINETY_MINUTES_MS = 90 * 60 * 1000,
+    TWO_HOURS_MS = 120 * 60 * 1000,
+    LAST_MINUTE_SAMPLE_MS = 42000,
+    OVER_A_MINUTE_MS = 102000
+};
+
+enum {
     STATUS_HEADER_HEIGHT = 12,
     STATUS_ICON_SIZE = 6,
     LOW_BATTERY = 10,
@@ -164,6 +172,117 @@ static void the_percentage_moves_left_of_the_bolt_while_charging(void)
     CHECK(!ui_test_area_has_only(&canvas, percent, theme.colors.header_background));
 }
 
+static StatusBarState sleeping(uint32_t remaining_ms, uint8_t percent, bool charging)
+{
+    StatusBarState state = battery_at(percent, charging);
+    state.sleep_active = true;
+    state.sleep_remaining_ms = remaining_ms;
+    return state;
+}
+
+static void the_sleep_text_counts_minutes_then_hours(void)
+{
+    char text[STATUS_BAR_SLEEP_CAPACITY];
+    status_bar_sleep_text(0, text, sizeof text);
+    CHECK(strcmp("0:00", text) == 0);
+    status_bar_sleep_text(LAST_MINUTE_SAMPLE_MS, text, sizeof text);
+    CHECK(strcmp("0:42", text) == 0);
+    status_bar_sleep_text(9 * 60 * 1000, text, sizeof text);
+    CHECK(strcmp("9:00", text) == 0);
+    status_bar_sleep_text(FIFTEEN_MINUTES_MS, text, sizeof text);
+    CHECK(strcmp("15m", text) == 0);
+    status_bar_sleep_text(FIFTEEN_MINUTES_MS - 1, text, sizeof text);
+    CHECK(strcmp("15m", text) == 0);
+    status_bar_sleep_text(14 * 60 * 1000, text, sizeof text);
+    CHECK(strcmp("14m", text) == 0);
+    status_bar_sleep_text(NINETY_MINUTES_MS, text, sizeof text);
+    CHECK(strcmp("90m", text) == 0);
+    status_bar_sleep_text(NINETY_MINUTES_MS + 59000, text, sizeof text);
+    CHECK(strcmp("91m", text) == 0);
+    status_bar_sleep_text(100 * 60 * 1000, text, sizeof text);
+    CHECK(strcmp("1h40", text) == 0);
+    status_bar_sleep_text(TWO_HOURS_MS, text, sizeof text);
+    CHECK(strcmp("2h", text) == 0);
+}
+
+static void the_sleep_time_sits_left_of_the_percentage(void)
+{
+    Theme theme = status_theme();
+    char sleep[STATUS_BAR_SLEEP_CAPACITY];
+    status_bar_sleep_text(FIFTEEN_MINUTES_MS, sleep, sizeof sleep);
+    Rect percent = status_bar_percent_area(&theme, "80%", false);
+    Rect area = status_bar_sleep_area(&theme, sleep, true, false, true, "80%");
+    CHECK(area.width > 0);
+    CHECK(area.x + area.width < percent.x);
+    CHECK(area.x + area.width >= percent.x - theme.metrics.padding);
+    Canvas canvas = draw_status(&theme, sleeping(FIFTEEN_MINUTES_MS, 80, false));
+    CHECK(!ui_test_area_has_only(&canvas, area, theme.colors.header_background));
+}
+
+static void the_sleep_time_stays_left_of_the_percentage_while_charging(void)
+{
+    Theme theme = status_theme();
+    char sleep[STATUS_BAR_SLEEP_CAPACITY];
+    status_bar_sleep_text(FIFTEEN_MINUTES_MS, sleep, sizeof sleep);
+    Rect percent = status_bar_percent_area(&theme, "100%", true);
+    Rect resting = status_bar_sleep_area(&theme, sleep, true, false, true, "100%");
+    Rect charging = status_bar_sleep_area(&theme, sleep, true, true, true, "100%");
+    CHECK(charging.x + charging.width < percent.x);
+    CHECK(charging.x < resting.x);
+}
+
+static void a_hidden_percentage_puts_the_sleep_time_beside_the_battery(void)
+{
+    Theme theme = status_theme();
+    char sleep[STATUS_BAR_SLEEP_CAPACITY];
+    status_bar_sleep_text(FIFTEEN_MINUTES_MS, sleep, sizeof sleep);
+    Rect battery = status_bar_battery_area(&theme);
+    Rect area = status_bar_sleep_area(&theme, sleep, true, false, false, "80%");
+    CHECK(area.x + area.width < battery.x);
+    StatusBarState state = sleeping(FIFTEEN_MINUTES_MS, 80, false);
+    state.hide_percent = true;
+    Canvas canvas = draw_status(&theme, state);
+    CHECK(!ui_test_area_has_only(&canvas, area, theme.colors.header_background));
+    Rect clear = {0, area.y, area.x, area.height};
+    CHECK(ui_test_area_has_only(&canvas, clear, theme.colors.header_background));
+}
+
+static void an_idle_timer_draws_no_sleep_time(void)
+{
+    Theme theme = status_theme();
+    char sleep[STATUS_BAR_SLEEP_CAPACITY];
+    status_bar_sleep_text(FIFTEEN_MINUTES_MS, sleep, sizeof sleep);
+    Rect area = status_bar_sleep_area(&theme, sleep, true, false, true, "50%");
+    Canvas canvas = draw_status(&theme, battery_at(50, false));
+    CHECK(ui_test_area_has_only(&canvas, area, theme.colors.header_background));
+}
+
+static void the_last_minute_uses_the_accent_color(void)
+{
+    Theme theme = status_theme();
+    char soon_text[STATUS_BAR_SLEEP_CAPACITY];
+    char later_text[STATUS_BAR_SLEEP_CAPACITY];
+    status_bar_sleep_text(LAST_MINUTE_SAMPLE_MS, soon_text, sizeof soon_text);
+    status_bar_sleep_text(OVER_A_MINUTE_MS, later_text, sizeof later_text);
+    CHECK(strcmp(soon_text, later_text) != 0);
+    CHECK(strlen(soon_text) == strlen(later_text));
+    Rect soon = status_bar_sleep_area(&theme, soon_text, true, false, true, "80%");
+    Rect later = status_bar_sleep_area(&theme, later_text, true, false, true, "80%");
+    CHECK_EQUAL(soon.x, later.x);
+    Canvas accent = draw_status(&theme, sleeping(LAST_MINUTE_SAMPLE_MS, 80, false));
+    Color saved[TEST_SCREEN_WIDTH * TEST_SCREEN_HEIGHT];
+    memcpy(saved, accent.pixels, sizeof saved);
+    Canvas plain = draw_status(&theme, sleeping(OVER_A_MINUTE_MS, 80, false));
+    bool differs = false;
+    for (int y = soon.y; y < soon.y + soon.height; y++) {
+        for (int x = soon.x; x < soon.x + soon.width; x++) {
+            Color earlier = saved[(size_t)y * TEST_SCREEN_WIDTH + (size_t)x];
+            differs = differs || earlier != canvas_pixel_at(&plain, x, y);
+        }
+    }
+    CHECK(differs);
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -180,6 +299,12 @@ int main(void)
         TEST_CASE(a_charging_battery_is_drawn_in_the_success_color),
         TEST_CASE(a_charging_battery_has_a_bolt_beside_it),
         TEST_CASE(the_percentage_moves_left_of_the_bolt_while_charging),
+        TEST_CASE(the_sleep_text_counts_minutes_then_hours),
+        TEST_CASE(the_sleep_time_sits_left_of_the_percentage),
+        TEST_CASE(the_sleep_time_stays_left_of_the_percentage_while_charging),
+        TEST_CASE(a_hidden_percentage_puts_the_sleep_time_beside_the_battery),
+        TEST_CASE(an_idle_timer_draws_no_sleep_time),
+        TEST_CASE(the_last_minute_uses_the_accent_color),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }
