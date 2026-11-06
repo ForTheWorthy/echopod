@@ -659,6 +659,7 @@ static StatusBluetooth bluetooth_of(const BluetoothLink *link)
 static StatusBarState current_status_bar(void)
 {
     HalBattery battery = hal_power_battery();
+    uint32_t now_ms = hal_clock_milliseconds();
     return (StatusBarState){
         .playback = playback_of(player_status(&app.player).state),
         .bluetooth = bluetooth_of(&app.bluetooth),
@@ -666,6 +667,8 @@ static StatusBarState current_status_bar(void)
         .battery_percent = battery.percent,
         .charging = battery.charging,
         .hide_percent = app.settings.settings.options[OPTION_BATTERY] != 0,
+        .sleep_active = app.power.sleep_timer_active,
+        .sleep_remaining_ms = power_policy_sleep_remaining_ms(&app.power, now_ms),
     };
 }
 

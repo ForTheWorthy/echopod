@@ -1,5 +1,6 @@
 #include "ui/status_bar.h"
 
+#include "core/format.h"
 #include "core/string_builder.h"
 #include "gfx/text.h"
 #include "ui/icons.h"
@@ -12,7 +13,13 @@ enum {
     BOLT_WIDTH_TENTHS = 6,
     BLUETOOTH_WIDTH_TENTHS = 7,
     TENTHS = 10,
-    FULL_PERCENT = 100
+    FULL_PERCENT = 100,
+    MILLISECONDS_PER_SECOND = 1000,
+    SECONDS_PER_MINUTE = 60,
+    MINUTES_PER_HOUR = 60,
+    MINUTE_TEXT_LIMIT = 10,
+    HOUR_TEXT_LIMIT = 100,
+    MILLISECONDS_PER_MINUTE = MILLISECONDS_PER_SECOND * SECONDS_PER_MINUTE
 };
 
 static int icon_top(const Theme *theme)
@@ -63,6 +70,30 @@ void status_bar_percent_text(uint8_t percent, char *text, size_t capacity)
     string_builder_append_char(&builder, '%');
 }
 
+void status_bar_sleep_text(uint32_t remaining_ms, char *text, size_t capacity)
+{
+    uint32_t minutes = remaining_ms / MILLISECONDS_PER_MINUTE;
+    if (minutes < MINUTE_TEXT_LIMIT) {
+        format_duration(remaining_ms, text, capacity);
+        return;
+    }
+    if (remaining_ms % MILLISECONDS_PER_MINUTE != 0) {
+        minutes++;
+    }
+    StringBuilder builder = string_builder_make(text, capacity);
+    if (minutes < HOUR_TEXT_LIMIT) {
+        string_builder_append_unsigned(&builder, minutes);
+        string_builder_append_char(&builder, 'm');
+        return;
+    }
+    string_builder_append_unsigned(&builder, minutes / MINUTES_PER_HOUR);
+    string_builder_append_char(&builder, 'h');
+    uint32_t rest = minutes % MINUTES_PER_HOUR;
+    if (rest > 0) {
+        string_builder_append_unsigned(&builder, rest);
+    }
+}
+
 static int percent_gap(const Theme *theme)
 {
     return theme->metrics.padding / 2 > 0 ? theme->metrics.padding / 2 : 1;
@@ -84,6 +115,20 @@ Rect status_bar_percent_area(const Theme *theme, const char *text, bool charging
     return (Rect){beside.x - percent_gap(theme) - width, beside.y, width, beside.height};
 }
 
+Rect status_bar_sleep_area(const Theme *theme, const char *text, bool battery_known, bool charging,
+                           bool show_percent, const char *percent)
+{
+    Rect battery = status_bar_battery_area(theme);
+    int width = text_width(theme->fonts.small, text);
+    if (!battery_known) {
+        return (Rect){theme->metrics.screen_width - theme->metrics.padding - width, battery.y,
+                      width, battery.height};
+    }
+    Rect anchor = show_percent ? status_bar_percent_area(theme, percent, charging)
+                               : (charging ? status_bar_bolt_area(theme) : battery);
+    return (Rect){anchor.x - percent_gap(theme) - width, anchor.y, width, anchor.height};
+}
+
 static void draw_percent(Canvas *canvas, const Theme *theme, uint8_t percent, bool charging)
 {
     char text[STATUS_BAR_PERCENT_CAPACITY];
@@ -92,6 +137,23 @@ static void draw_percent(Canvas *canvas, const Theme *theme, uint8_t percent, bo
     TextStyle style = {.font = theme->fonts.small, .color = theme->colors.header_text};
     label_draw(canvas, style,
                (Label){.area = label_centered_area(style.font, area, text), .text = text});
+}
+
+static void draw_sleep(Canvas *canvas, const Theme *theme, StatusBarState state)
+{
+    char sleep[STATUS_BAR_SLEEP_CAPACITY];
+    char percent[STATUS_BAR_PERCENT_CAPACITY];
+    status_bar_sleep_text(state.sleep_remaining_ms, sleep, sizeof sleep);
+    status_bar_percent_text(state.battery_percent, percent, sizeof percent);
+    bool show_percent = state.battery_known && !state.hide_percent;
+    Rect area = status_bar_sleep_area(theme, sleep, state.battery_known, state.charging,
+                                      show_percent, percent);
+    Color color = state.sleep_remaining_ms < STATUS_BAR_LAST_MINUTE_MS
+                      ? theme->colors.selection_background
+                      : theme->colors.header_text;
+    TextStyle style = {.font = theme->fonts.small, .color = color};
+    label_draw(canvas, style,
+               (Label){.area = label_centered_area(style.font, area, sleep), .text = sleep});
 }
 
 static Color fill_color(const Theme *theme, StatusBarState state)
@@ -151,5 +213,8 @@ void status_bar_draw(Canvas *canvas, const Theme *theme, StatusBarState state)
         if (!state.hide_percent) {
             draw_percent(canvas, theme, state.battery_percent, state.charging);
         }
+    }
+    if (state.sleep_active) {
+        draw_sleep(canvas, theme, state);
     }
 }

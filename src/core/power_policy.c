@@ -62,6 +62,14 @@ void power_policy_cancel_sleep_timer(PowerPolicy *policy)
     policy->sleep_timer_active = false;
 }
 
+uint32_t power_policy_sleep_remaining_ms(const PowerPolicy *policy, uint32_t now_ms)
+{
+    if (!policy->sleep_timer_active || deadline_reached(now_ms, policy->sleep_deadline_ms)) {
+        return 0;
+    }
+    return policy->sleep_deadline_ms - now_ms;
+}
+
 void power_policy_wake(PowerPolicy *policy, uint32_t now_ms)
 {
     policy->last_activity_ms = now_ms;
