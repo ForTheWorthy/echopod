@@ -10,6 +10,7 @@ target_compile_options(echo_sim_codecs PRIVATE -w)
 
 add_library(echo_sim_decoder STATIC sim_decoder.c sim_mp4.c sim_opus.c)
 target_include_directories(echo_sim_decoder PUBLIC .)
+target_compile_definitions(echo_sim_decoder PRIVATE _POSIX_C_SOURCE=200809L)
 target_link_libraries(echo_sim_decoder PUBLIC echo_hal echo_codec echo_faad2 echo_opus echo_sim_codecs PRIVATE echo_core echo_options)
 
 string(REPLACE ";" "|" ECHO_GLYPH_FACE_PATHS "${ECHO_GLYPH_FACE_FILES}")
@@ -25,6 +26,7 @@ target_link_libraries(echo_sim_language PUBLIC echo_hal PRIVATE echo_options)
 
 add_library(echo_sim_storage STATIC sim_storage.c)
 target_include_directories(echo_sim_storage PUBLIC .)
+target_compile_definitions(echo_sim_storage PRIVATE _POSIX_C_SOURCE=200809L)
 target_link_libraries(echo_sim_storage PUBLIC echo_hal PRIVATE echo_options)
 
 add_executable(echo_sim
